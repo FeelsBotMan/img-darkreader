@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (QWidget, QGridLayout, QLabel, 
                            QVBoxLayout, QHBoxLayout)
-from PyQt6.QtCore import Qt, pyqtSignal, QRect
-from PyQt6.QtGui import QPixmap, QMouseEvent, QPainter, QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPointF
+from PyQt6.QtGui import (QPixmap, QMouseEvent, QPainter, QColor, 
+                        QPen, QPolygonF, QBrush)
 from pathlib import Path
 from models.book import Book
 from utils.thumbnail_manager import ThumbnailManager
@@ -9,40 +10,100 @@ from typing import List
 import math
 
 class StarRating(QWidget):
+    """별점 위젯"""
     ratingChanged = pyqtSignal(float)
     
     def __init__(self, rating: float = 0):
         super().__init__()
-        self.rating = rating
-        self.hover_rating = 0
-        self.setMouseTracking(True)
-        self.setFixedSize(100, 20)
+        self._rating = rating  # 현재 별점 (0-5)
+        self._hover_rating = 0  # 마우스 호버 시 임시 별점
+        self._star_count = 5  # 총 별 개수
+        self._star_size = 20  # 별 하나의 크기
+        self._spacing = 5  # 별 사이 간격
         
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        star_width = self.width() // 5
+        # 위젯 크기 설정
+        total_width = (self._star_size * self._star_count) + (self._spacing * (self._star_count - 1))
+        self.setFixedSize(total_width, self._star_size)
+        
+        # 마우스 트래킹 활성화 (hover 효과를 위해)
+        self.setMouseTracking(True)
+    
+    def _draw_star(self, painter: QPainter, x: int, filled: bool = False):
+        """별 하나를 그리는 메서드"""
+        points = []
+        center = QPointF(x + self._star_size/2, self._star_size/2)
+        outer_radius = self._star_size/2
+        inner_radius = self._star_size/4
+        
+        # 별의 10개 꼭지점 계산 (5개의 외곽점과 5개의 내부점)
+        for i in range(10):
+            angle = math.pi/2 + (2 * math.pi * i)/10
+            radius = outer_radius if i % 2 == 0 else inner_radius
+            points.append(QPointF(
+                center.x() + radius * math.cos(angle),
+                center.y() - radius * math.sin(angle)
+            ))
         
         # 별 그리기
-        for i in range(5):
-            x = i * star_width
-            rect = QRect(x, 0, star_width-2, 20)
-            if i < math.floor(self.hover_rating or self.rating):
-                painter.fillRect(rect, QColor(255, 215, 0))
-            else:
-                painter.fillRect(rect, QColor(128, 128, 128))
+        star = QPolygonF(points)
+        if filled:
+            painter.setBrush(QColor(255, 215, 0))  # 금색
+        else:
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPolygon(star)
+    
+    def paintEvent(self, event):
+        """위젯 그리기"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # 테두리 색상 설정
+        painter.setPen(QPen(QColor(255, 215, 0), 1))  # 금색 테두리
+        
+        # 각 별 그리기
+        for i in range(self._star_count):
+            x = i * (self._star_size + self._spacing)
+            # hover 중이면 hover_rating 사용, 아니면 실제 rating 사용
+            rating_to_use = self._hover_rating if self._hover_rating > 0 else self._rating
+            self._draw_star(painter, x, filled=(i < rating_to_use))
     
     def mouseMoveEvent(self, event: QMouseEvent):
-        self.hover_rating = (event.position().x() / self.width()) * 5
+        """마우스 이동 시 호버 효과"""
+        x = event.position().x()
+        star_index = x // (self._star_size + self._spacing)
+        # 마우스가 위젯 영역을 벗어나면 hover 효과 제거
+        if 0 <= star_index < self._star_count:
+            self._hover_rating = star_index + 1
+        else:
+            self._hover_rating = 0
         self.update()
     
     def leaveEvent(self, event):
-        self.hover_rating = 0
+        """마우스가 위젯을 벗어날 때"""
+        self._hover_rating = 0
         self.update()
     
-    def mouseReleaseEvent(self, event: QMouseEvent):
+    def mousePressEvent(self, event: QMouseEvent):
+        """클릭으로 별점 선택"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self.rating = (event.position().x() / self.width()) * 5
-            self.ratingChanged.emit(self.rating)
+            x = event.position().x()
+            star_index = x // (self._star_size + self._spacing)
+            if 0 <= star_index < self._star_count:
+                new_rating = star_index + 1
+                if self._rating == new_rating:  # 같은 별을 다시 클릭하면 취소
+                    new_rating = 0
+                self._rating = new_rating
+                self.ratingChanged.emit(float(self._rating))
+                self.update()
+    
+    def get_rating(self) -> float:
+        """현재 별점 반환"""
+        return float(self._rating)
+    
+    def set_rating(self, rating: float):
+        """별점 설정"""
+        if 0 <= rating <= self._star_count:
+            self._rating = rating
             self.update()
 
 class BookCard(QWidget):
@@ -88,6 +149,7 @@ class BookCard(QWidget):
         
         # 평점
         rating_widget = StarRating(self.book.rating)
+        rating_widget.set_rating(self.book.rating)  # 초기 별점 설정
         rating_widget.ratingChanged.connect(self._on_rating_changed)
         layout.addWidget(rating_widget)
         
