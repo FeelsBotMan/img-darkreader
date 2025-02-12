@@ -9,6 +9,12 @@ class Theme:
     text_color: Tuple[int, int, int]
     window_background: str
     window_text: str
+    contrast: float = 1.0  # 대비
+    brightness: float = 1.0  # 밝기
+    sharpness: float = 1.0  # 선명도
+    gamma: float = 1.0  # 감마
+    use_ai_upscaling: bool = True  # AI 업스케일링 사용 여부
+    upscale_factor: int = 2  # 업스케일링 배율
 
 class Settings:
     def __init__(self):
@@ -16,13 +22,21 @@ class Settings:
             background_color=(0, 0, 0),
             text_color=(200, 200, 200),
             window_background="#2B2B2B",
-            window_text="#FFFFFF"
+            window_text="#FFFFFF",
+            contrast=1.2,
+            brightness=0.9,
+            sharpness=1.1,
+            gamma=1.1
         )
         self.light_theme = Theme(
             background_color=(255, 255, 255),
             text_color=(0, 0, 0),
             window_background="#FFFFFF",
-            window_text="#000000"
+            window_text="#000000",
+            contrast=1.1,
+            brightness=1.0,
+            sharpness=1.1,
+            gamma=1.0
         )
         
         self.is_dark_mode = True

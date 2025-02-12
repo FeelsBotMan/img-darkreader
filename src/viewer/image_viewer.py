@@ -15,6 +15,7 @@ class ImageViewer(QMainWindow):
         super().__init__()
         self.settings = Settings()
         self.image_processor = ImageProcessor(self.settings)
+        self.image_processor.set_reload_callback(self.reload_current_image)
         self.library = Library()
         self.current_book: Optional[Book] = None
         self.current_folder = None
@@ -23,6 +24,10 @@ class ImageViewer(QMainWindow):
         
         self.init_ui()
         self.apply_theme()  # 초기 테마 적용
+        
+        # 상태 표시 레이블 추가
+        self.status_label = QLabel()
+        self.statusBar().addWidget(self.status_label)
         
     def init_ui(self):
         self.setWindowTitle('다크 리더')
@@ -59,6 +64,19 @@ class ImageViewer(QMainWindow):
                 self.show_next_image()
             elif event.key() == Qt.Key.Key_Escape:
                 self.show_library()
+            # 가독성 조정 단축키
+            elif event.key() == Qt.Key.Key_BracketLeft:  # [
+                self.adjust_contrast(-0.1)
+            elif event.key() == Qt.Key.Key_BracketRight:  # ]
+                self.adjust_contrast(0.1)
+            elif event.key() == Qt.Key.Key_Minus:  # -
+                self.adjust_brightness(-0.1)
+            elif event.key() == Qt.Key.Key_Equal:  # =
+                self.adjust_brightness(0.1)
+            elif event.key() == Qt.Key.Key_Comma:  # ,
+                self.adjust_sharpness(-0.1)
+            elif event.key() == Qt.Key.Key_Period:  # .
+                self.adjust_sharpness(0.1)
         if event.key() == Qt.Key.Key_O:
             self.open_folder()
         elif event.key() == Qt.Key.Key_T:  # T키로 테마 전환
@@ -112,6 +130,13 @@ class ImageViewer(QMainWindow):
                 # 제목 표시줄에 현재 페이지 정보 표시
                 self.setWindowTitle(f'다크 리더 - {self.current_book.title} ({self.current_index + 1}/{self.current_book.total_pages})')
             
+            # 업스케일링 상태 확인
+            cache_path = self.image_processor.upscaler._get_cache_path(Path(image_path))
+            if cache_path.exists():
+                self.status_label.setText("업스케일링 완료")
+            else:
+                self.status_label.setText("업스케일링 처리 중...")
+            
     def show_next_image(self):
         if self.current_images and self.current_index < len(self.current_images) - 1:
             self.current_index += 1
@@ -163,3 +188,23 @@ class ImageViewer(QMainWindow):
         
         # 라이브러리 뷰 업데이트
         self.library_widget.update_theme(theme) 
+
+    def adjust_contrast(self, delta: float):
+        theme = self.settings.current_theme
+        theme.contrast = max(0.5, min(2.0, theme.contrast + delta))
+        self.show_current_image()  # 이미지 다시 처리
+
+    def adjust_brightness(self, delta: float):
+        theme = self.settings.current_theme
+        theme.brightness = max(0.5, min(1.5, theme.brightness + delta))
+        self.show_current_image()
+
+    def adjust_sharpness(self, delta: float):
+        theme = self.settings.current_theme
+        theme.sharpness = max(0.5, min(2.0, theme.sharpness + delta))
+        self.show_current_image() 
+
+    def reload_current_image(self):
+        """현재 이미지 다시 로드"""
+        if hasattr(self, 'current_images') and 0 <= self.current_index < len(self.current_images):
+            self.show_current_image() 
