@@ -35,7 +35,8 @@ class Book:
             'path': str(self.path),
             'total_pages': self.total_pages,
             'rating': self.rating,
-            'current_page': self.current_page
+            'current_page': self.current_page,
+            'is_read': self.is_read
         }
     
     @classmethod
@@ -46,5 +47,6 @@ class Book:
             path=Path(data['path']),
             total_pages=data['total_pages'],
             rating=data['rating'],
-            current_page=data['current_page']
+            current_page=data['current_page'],
+            is_read=data.get('is_read', False)
         ) 
