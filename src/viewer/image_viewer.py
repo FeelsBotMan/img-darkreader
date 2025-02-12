@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
 from pathlib import Path
-from .image_processor import ImageProcessor
-from ..config.settings import Settings
+from viewer.image_processor import ImageProcessor
+from config.settings import Settings
 
 class ImageViewer(QMainWindow):
     def __init__(self):

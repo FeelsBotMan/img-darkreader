@@ -1,3 +1,9 @@
+## 프로젝트 목적
+
+이미지의 색상을 반전하여 데스크톱용 다크리더 프로그램
+
+## 프로젝트 설정
+
 Python 가상환경 활성화
 
 ```bash
@@ -15,11 +21,38 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+프로젝트를 개발 모드로 설치합니다. 프로젝트 루트 디렉토리에서 다음 명령을 실행합니다:
+
+```bash
+# 가상환경이 활성화된 상태에서
+pip install -e .
+```
+
 프로그램 실행
 
 ```bash
 # 프로젝트 루트 디렉토리에서
-python main.py
+python run.py
+```
+
+프로젝트 구조
+
+```
+프로젝트/
+├── src/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── viewer/
+│   │   ├── __init__.py
+│   │   ├── image_viewer.py
+│   │   └── image_processor.py
+│   └── config/
+│       ├── __init__.py
+│       └── settings.py
+├── setup.py
+├── run.py
+├── requirements.txt
+└── pyproject.toml
 ```
 
 프로그램 사용 방법:
