@@ -8,7 +8,7 @@ from pathlib import Path
 class ImageProcessor:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.upscaler = ImageUpscaler(Path.home() / '.dark_reader' / 'cache')
+        self.upscaler = ImageUpscaler(memory_cache_size=5)
         self.current_image_path = None
         self.reload_callback = None  # 이미지 리로드 콜백
         

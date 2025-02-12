@@ -122,6 +122,15 @@ class ImageViewer(QMainWindow):
             processed_image = self.image_processor.process_image(str(image_path))
             self.display_image(processed_image)
             
+            # 다음 페이지들 미리 업스케일링
+            next_images = []
+            for i in range(1, 3):  # 다음 2페이지를 미리 처리
+                next_index = self.current_index + i
+                if next_index < len(self.current_images):
+                    next_images.append(self.current_images[next_index])
+            if next_images:
+                self.image_processor.upscaler.prefetch_images(next_images)
+            
             # 현재 페이지 업데이트 및 저장
             if self.current_book:
                 self.current_book.update_current_page(self.current_index)
