@@ -77,16 +77,18 @@ class ImageViewer(QMainWindow):
             self.stack.setCurrentWidget(self.reader_widget)
             
     def load_folder(self, folder_path):
-        print(f"Loading folder: {folder_path}")  # 디버깅용 로그
+        print(f"Loading folder: {folder_path}")
         self.current_book = self.library.add_book(folder_path)
         self.current_images = sorted([
             f for f in Path(folder_path).glob("*")
             if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
         ])
-        print(f"Found {len(self.current_images)} images")  # 디버깅용 로그
+        print(f"Found {len(self.current_images)} images")
+        
         if self.current_images:
-            self.current_index = (self.current_book.current_page or 0)
-            print(f"Starting from page {self.current_index}")  # 디버깅용 로그
+            # 저장된 현재 페이지로 이동
+            self.current_index = self.current_book.get_current_page()
+            print(f"Starting from page {self.current_index}")
             self.show_current_image()
             self.stack.setCurrentWidget(self.reader_widget)
         else:
@@ -99,10 +101,13 @@ class ImageViewer(QMainWindow):
             processed_image = self.image_processor.process_image(str(image_path))
             self.display_image(processed_image)
             
-            # 현재 페이지 저장
+            # 현재 페이지 업데이트 및 저장
             if self.current_book:
-                self.current_book.current_page = self.current_index
+                self.current_book.update_current_page(self.current_index)
                 self.library.update_book(self.current_book)
+                
+                # 제목 표시줄에 현재 페이지 정보 표시
+                self.setWindowTitle(f'다크 리더 - {self.current_book.title} ({self.current_index + 1}/{self.current_book.total_pages})')
             
     def show_next_image(self):
         if self.current_images and self.current_index < len(self.current_images) - 1:

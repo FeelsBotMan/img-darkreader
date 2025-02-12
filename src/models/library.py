@@ -12,10 +12,19 @@ class Library:
     
     def add_book(self, folder_path: str | Path) -> Book:
         """새로운 책을 라이브러리에 추가합니다."""
+        path = Path(folder_path)
+        
+        # 이미 존재하는 책인지 확인
+        existing_book = self.get_book(path)
+        if existing_book:
+            print(f"Found existing book: {existing_book.title}, current_page: {existing_book.current_page}")
+            return existing_book
+        
+        # 새 책 생성
         book = Book.from_folder(folder_path)
-        if not any(b.path == book.path for b in self.books):
-            self.books.append(book)
-            self.save_library()
+        print(f"Created new book: {book.title}")
+        self.books.append(book)
+        self.save_library()
         return book
     
     def get_book(self, path: str | Path) -> Optional[Book]:

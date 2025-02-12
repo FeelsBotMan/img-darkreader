@@ -49,4 +49,14 @@ class Book:
             rating=data['rating'],
             current_page=data['current_page'],
             is_read=data.get('is_read', False)
-        ) 
+        )
+    
+    def get_current_page(self) -> int:
+        """현재 페이지를 반환합니다. 없으면 0을 반환합니다."""
+        return self.current_page if self.current_page is not None else 0
+    
+    def update_current_page(self, page: int) -> None:
+        """현재 페이지를 업데이트하고 마지막 페이지인 경우 읽음 상태를 변경합니다."""
+        self.current_page = page
+        if page == self.total_pages - 1:  # 마지막 페이지에 도달
+            self.is_read = True 

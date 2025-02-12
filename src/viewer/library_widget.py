@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QWidget, QGridLayout, QLabel, 
                            QVBoxLayout, QHBoxLayout)
 from PyQt6.QtCore import Qt, pyqtSignal, QRect
-from PyQt6.QtGui import QPixmap, QMouseEvent
+from PyQt6.QtGui import QPixmap, QMouseEvent, QPainter, QColor
 from pathlib import Path
 from models.book import Book
 from utils.thumbnail_manager import ThumbnailManager
@@ -19,19 +19,17 @@ class StarRating(QWidget):
         self.setFixedSize(100, 20)
         
     def paintEvent(self, event):
-        from PyQt6.QtGui import QPainter, QColor
         painter = QPainter(self)
-        star_width = self.width() // 5  # 정수 나눗셈으로 변경
+        star_width = self.width() // 5
         
         # 별 그리기
         for i in range(5):
             x = i * star_width
-            # QRect 객체를 사용하여 정수 좌표로 그리기
             rect = QRect(x, 0, star_width-2, 20)
             if i < math.floor(self.hover_rating or self.rating):
-                painter.fillRect(rect, QColor(255, 215, 0))  # 금색
+                painter.fillRect(rect, QColor(255, 215, 0))
             else:
-                painter.fillRect(rect, QColor(128, 128, 128))  # 회색
+                painter.fillRect(rect, QColor(128, 128, 128))
     
     def mouseMoveEvent(self, event: QMouseEvent):
         self.hover_rating = (event.position().x() / self.width()) * 5
@@ -79,8 +77,12 @@ class BookCard(QWidget):
         layout.addWidget(title_label)
         
         # 페이지 정보
-        current = self.book.current_page + 1 if self.book.current_page is not None else 0
-        page_label = QLabel(f"{current}/{self.book.total_pages}")
+        current = self.book.get_current_page() + 1  # 1-based 페이지 번호
+        page_info = f"{current}/{self.book.total_pages}"
+        if self.book.is_read:
+            page_info += " (완독)"
+        
+        page_label = QLabel(page_info)
         page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(page_label)
         
