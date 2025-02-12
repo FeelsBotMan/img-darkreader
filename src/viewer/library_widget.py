@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QWidget, QGridLayout, QLabel, 
-                           QVBoxLayout, QHBoxLayout)
+                           QVBoxLayout, QHBoxLayout, QScrollArea)
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPointF
 from PyQt6.QtGui import (QPixmap, QMouseEvent, QPainter, QColor, 
                         QPen, QPolygonF, QBrush)
@@ -172,18 +172,35 @@ class LibraryWidget(QWidget):
         self.init_ui()
         
     def init_ui(self):
-        self.layout = QGridLayout(self)
-        self.layout.setSpacing(20)
+        # 메인 레이아웃
+        main_layout = QVBoxLayout(self)
+        
+        # 스크롤 영역 생성
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # 그리드를 포함할 컨테이너 위젯
+        self.container = QWidget()
+        self.grid_layout = QGridLayout(self.container)
+        self.grid_layout.setSpacing(20)
+        
+        # 스크롤 영역에 컨테이너 설정
+        scroll.setWidget(self.container)
+        
+        # 메인 레이아웃에 스크롤 영역 추가
+        main_layout.addWidget(scroll)
         
     def update_books(self, books: List[Book]):
         # 기존 위젯 제거
-        while self.layout.count():
-            item = self.layout.takeAt(0)
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
         # 책 카드 배치
-        columns = max(1, self.width() // 250)  # 한 행에 표시할 카드 수
+        columns = max(1, (self.width() - 40) // 250)  # 여백 고려
         for i, book in enumerate(books):
             row = i // columns
             col = i % columns
@@ -191,8 +208,27 @@ class LibraryWidget(QWidget):
             card = BookCard(book, self.thumbnail_manager)
             card.bookSelected.connect(self.bookSelected.emit)
             card.ratingChanged.connect(self._on_book_rating_changed)
-            self.layout.addWidget(card, row, col)
-            
+            self.grid_layout.addWidget(card, row, col)
+        
+        # 빈 공간을 채우기 위한 스트레치 추가
+        self.grid_layout.setRowStretch(self.grid_layout.rowCount(), 1)
+        
+    def resizeEvent(self, event):
+        """창 크기가 변경될 때 그리드를 다시 계산"""
+        super().resizeEvent(event)
+        if hasattr(self, 'grid_layout') and self.grid_layout.count() > 0:
+            books = []
+            # 현재 표시된 책들 수집
+            for i in range(self.grid_layout.count()):
+                item = self.grid_layout.itemAt(i)
+                if item and item.widget():
+                    widget = item.widget()
+                    if isinstance(widget, BookCard):
+                        books.append(widget.book)
+            # 그리드 다시 계산
+            if books:
+                self.update_books(books)
+    
     def _on_book_rating_changed(self, book: Book, rating: float):
         from models.library import Library
         library = Library()
