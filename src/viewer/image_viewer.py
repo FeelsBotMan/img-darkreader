@@ -22,6 +22,7 @@ class ImageViewer(QMainWindow):
         self.current_index = -1
         
         self.init_ui()
+        self.apply_theme()  # 초기 테마 적용
         
     def init_ui(self):
         self.setWindowTitle('다크 리더')
@@ -60,6 +61,8 @@ class ImageViewer(QMainWindow):
                 self.show_library()
         if event.key() == Qt.Key.Key_O:
             self.open_folder()
+        elif event.key() == Qt.Key.Key_T:  # T키로 테마 전환
+            self.toggle_theme()
             
     def open_book(self, book: Book):
         self.current_book = book
@@ -127,4 +130,36 @@ class ImageViewer(QMainWindow):
         scaled_pixmap = pixmap.scaled(width, height, 
                                     Qt.AspectRatioMode.KeepAspectRatio,
                                     Qt.TransformationMode.SmoothTransformation)
-        self.image_label.setPixmap(scaled_pixmap) 
+        self.image_label.setPixmap(scaled_pixmap)
+
+    def toggle_theme(self):
+        self.settings.toggle_theme()
+        self.apply_theme()
+        # 현재 이미지 다시 로드 (새로운 테마로 처리)
+        if self.current_book:
+            self.show_current_image()
+
+    def apply_theme(self):
+        """현재 테마를 적용합니다."""
+        theme = self.settings.current_theme
+        
+        # 스타일시트 설정
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {theme.window_background};
+                color: {theme.window_text};
+            }}
+            QLabel {{
+                color: {theme.window_text};
+            }}
+            QScrollArea {{
+                background-color: {theme.window_background};
+            }}
+            QWidget {{
+                background-color: {theme.window_background};
+                color: {theme.window_text};
+            }}
+        """)
+        
+        # 라이브러리 뷰 업데이트
+        self.library_widget.update_theme(theme) 

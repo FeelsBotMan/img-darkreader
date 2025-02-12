@@ -232,4 +232,24 @@ class LibraryWidget(QWidget):
     def _on_book_rating_changed(self, book: Book, rating: float):
         from models.library import Library
         library = Library()
-        library.update_book(book) 
+        library.update_book(book)
+
+    def update_theme(self, theme):
+        """테마를 업데이트합니다."""
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {theme.window_background};
+                color: {theme.window_text};
+            }}
+        """)
+        # 모든 책 카드 업데이트
+        for i in range(self.grid_layout.count()):
+            item = self.grid_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if isinstance(widget, BookCard):
+                    widget.setStyleSheet(f"""
+                        QLabel {{
+                            color: {theme.window_text};
+                        }}
+                    """) 

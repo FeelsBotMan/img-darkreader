@@ -1,32 +1,67 @@
-import yaml
+from dataclasses import dataclass
 from pathlib import Path
+import yaml
+from typing import Tuple
+
+@dataclass
+class Theme:
+    background_color: Tuple[int, int, int]
+    text_color: Tuple[int, int, int]
+    window_background: str
+    window_text: str
 
 class Settings:
     def __init__(self):
-        self.background_color = (0, 0, 0)  # 기본 배경색: 검정
-        self.text_color = (200, 200, 200)  # 기본 텍스트색: 밝은 회색
-        self.threshold = 240  # 흰색 감지 임계값
+        self.dark_theme = Theme(
+            background_color=(0, 0, 0),
+            text_color=(200, 200, 200),
+            window_background="#2B2B2B",
+            window_text="#FFFFFF"
+        )
+        self.light_theme = Theme(
+            background_color=(255, 255, 255),
+            text_color=(0, 0, 0),
+            window_background="#FFFFFF",
+            window_text="#000000"
+        )
+        
+        self.is_dark_mode = True
+        self.threshold = 240
         
         self.load_settings()
-        
+    
+    @property
+    def current_theme(self) -> Theme:
+        return self.dark_theme if self.is_dark_mode else self.light_theme
+    
+    @property
+    def background_color(self) -> Tuple[int, int, int]:
+        return self.current_theme.background_color
+    
+    @property
+    def text_color(self) -> Tuple[int, int, int]:
+        return self.current_theme.text_color
+    
+    def toggle_theme(self):
+        self.is_dark_mode = not self.is_dark_mode
+        self.save_settings()
+    
     def load_settings(self):
         config_path = Path.home() / '.dark_reader' / 'config.yaml'
         if config_path.exists():
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-                self.background_color = tuple(config.get('background_color', self.background_color))
-                self.text_color = tuple(config.get('text_color', self.text_color))
+                self.is_dark_mode = config.get('is_dark_mode', True)
                 self.threshold = config.get('threshold', self.threshold)
-                
+    
     def save_settings(self):
         config_path = Path.home() / '.dark_reader' / 'config.yaml'
         config_path.parent.mkdir(parents=True, exist_ok=True)
         
         config = {
-            'background_color': self.background_color,
-            'text_color': self.text_color,
+            'is_dark_mode': self.is_dark_mode,
             'threshold': self.threshold
         }
         
-        with open(config_path, 'w') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f) 
