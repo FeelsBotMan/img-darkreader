@@ -11,7 +11,7 @@ Python 가상환경 활성화
 python -m venv venv
 
 # Windows에서 가상환경 활성화
-venv\Scripts\activate
+source venv/Scripts/activate
 
 # Linux/Mac에서 가상환경 활성화
 source venv/bin/activate

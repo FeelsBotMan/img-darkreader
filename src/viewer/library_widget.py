@@ -118,23 +118,56 @@ class BookCard(QWidget):
         
     def init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 섬네일 컨테이너
+        thumbnail_container = QWidget()
+        thumbnail_container.setFixedSize(200, 300)
+        thumbnail_container.setStyleSheet("background-color: rgba(0, 0, 0, 0.1); border-radius: 5px;")
+        thumbnail_layout = QVBoxLayout(thumbnail_container)
+        thumbnail_layout.setContentsMargins(0, 0, 0, 0)
         
         # 섬네일
+        image_label = QLabel()
+        image_label.setFixedSize(200, 300)
+        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image_label.setStyleSheet("background: transparent;")
+        
+        # 이미지 찾기 및 썸네일 생성
         first_image = next(self.book.path.glob("*.jpg"), None) or \
-                     next(self.book.path.glob("*.png"), None)
+                     next(self.book.path.glob("*.png"), None) or \
+                     next(self.book.path.glob("*.jpeg"), None)
+                     
         if first_image:
+            #print(f"Found cover image: {first_image}")  # 디버깅용
             thumb_path = self.thumbnail_manager.get_thumbnail(first_image)
             if thumb_path:
-                image_label = QLabel()
+                #print(f"Generated thumbnail at: {thumb_path}")  # 디버깅용
                 pixmap = QPixmap(thumb_path)
-                image_label.setPixmap(pixmap)
-                image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout.addWidget(image_label)
+                if not pixmap.isNull():
+                    # 섬네일 크기에 맞게 스케일링
+                    scaled_pixmap = pixmap.scaled(
+                        200, 300,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    image_label.setPixmap(scaled_pixmap)
+                else:
+                    print(f"Failed to load thumbnail pixmap from: {thumb_path}")
+            else:
+                print(f"Failed to generate thumbnail for: {first_image}")
+        else:
+            print(f"No cover image found in: {self.book.path}")
+            
+        thumbnail_layout.addWidget(image_label)
+        layout.addWidget(thumbnail_container)
         
         # 제목
-        title = self.book.title[:10] + "..." if len(self.book.title) > 10 else self.book.title
+        title = self.book.title[:20] + "..." if len(self.book.title) > 20 else self.book.title
         title_label = QLabel(title)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setWordWrap(True)
+        title_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
         layout.addWidget(title_label)
         
         # 페이지 정보
@@ -153,7 +186,7 @@ class BookCard(QWidget):
         rating_widget.ratingChanged.connect(self._on_rating_changed)
         layout.addWidget(rating_widget)
         
-        self.setFixedSize(220, 350)
+        self.setFixedSize(220, 400)
         
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
