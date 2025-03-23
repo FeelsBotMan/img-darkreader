@@ -6,6 +6,7 @@ import threading
 from queue import Queue
 from typing import Optional, Callable, Dict
 from collections import OrderedDict
+import os
 
 class ImageUpscaler:
     def __init__(self, memory_cache_size: int = 5):
@@ -16,6 +17,10 @@ class ImageUpscaler:
         self.memory_cache_size = memory_cache_size
         self.memory_cache: OrderedDict[str, np.ndarray] = OrderedDict()
         self.cache_lock = threading.Lock()
+        
+        # 캐시 디렉토리 초기화
+        self.cache_dir = Path.home() / '.img-darkreader' / 'cache'
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         self._start_background_thread()
     
@@ -35,6 +40,24 @@ class ImageUpscaler:
                 self.memory_cache[str(image_path)] = image
                 return image
             return None
+
+    def _get_from_disk_cache(self, image_path: Path) -> Optional[np.ndarray]:
+        """디스크 캐시에서 이미지 조회"""
+        cache_path = self._get_cache_path(image_path)
+        if cache_path.exists():
+            try:
+                return self._read_image(str(cache_path))
+            except Exception as e:
+                print(f"디스크 캐시 읽기 오류: {e}")
+        return None
+
+    def _save_to_disk_cache(self, image_path: Path, image: np.ndarray):
+        """이미지를 디스크 캐시에 저장"""
+        cache_path = self._get_cache_path(image_path)
+        try:
+            cv2.imwrite(str(cache_path), image)
+        except Exception as e:
+            print(f"디스크 캐시 저장 오류: {e}")
 
     def _get_cache_path(self, image_path: Path) -> Path:
         """캐시된 이미지 경로 반환"""
@@ -59,6 +82,14 @@ class ImageUpscaler:
         # 메모리 캐시 확인
         cached_image = self._get_from_memory_cache(str(image_path))
         if cached_image is not None:
+            if callback:
+                callback(str(image_path))
+            return str(image_path)
+            
+        # 디스크 캐시 확인
+        cached_image = self._get_from_disk_cache(image_path)
+        if cached_image is not None:
+            self._add_to_memory_cache(str(image_path), cached_image)
             if callback:
                 callback(str(image_path))
             return str(image_path)
@@ -114,6 +145,9 @@ class ImageUpscaler:
                     
                     # 메모리 캐시에 추가
                     self._add_to_memory_cache(str(image_path), output)
+                    
+                    # 디스크 캐시에 저장
+                    self._save_to_disk_cache(image_path, output)
                     
                     if callback:
                         callback(str(image_path))

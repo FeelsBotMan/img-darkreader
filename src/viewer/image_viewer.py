@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
-                           QLabel, QFileDialog, QStackedWidget)
+                           QLabel, QFileDialog, QStackedWidget, QSizePolicy,
+                           QScrollArea)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
 from pathlib import Path
@@ -45,9 +46,33 @@ class ImageViewer(QMainWindow):
         # 리더 뷰
         self.reader_widget = QWidget()
         reader_layout = QVBoxLayout(self.reader_widget)
+        reader_layout.setContentsMargins(0, 0, 0, 0)  # 여백 제거
+        reader_layout.setSpacing(0)  # 간격 제거
+        
+        # 이미지 레이블 설정
         self.image_label = QLabel()
+        self.image_label.setObjectName("image_label")  # 스타일시트에서 참조할 ID 설정
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        reader_layout.addWidget(self.image_label)
+        self.image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        
+        # 컨테이너 위젯 생성
+        container = QWidget()
+        container.setStyleSheet("background-color: transparent;")  # 배경을 투명하게 설정
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(self.image_label)
+        
+        # 스크롤 영역 설정
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidget(container)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; }")
+        
+        # 메인 레이아웃에 스크롤 영역 추가
+        reader_layout.addWidget(self.scroll_area)
+        
         self.stack.addWidget(self.reader_widget)
         
         # 초기 라이브러리 로드
@@ -55,33 +80,63 @@ class ImageViewer(QMainWindow):
         
         # 키보드 이벤트 활성화
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.reader_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.scroll_area.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
     def keyPressEvent(self, event):
+        #print(f"키 이벤트 발생: {event.key()}")  # 디버깅을 위한 로그 추가
         if self.stack.currentWidget() == self.reader_widget:
             if event.key() == Qt.Key.Key_Left:
+                #print("이전 이미지로 이동")
                 self.show_previous_image()
+                event.accept()  # 이벤트 처리 완료 표시
+                return
             elif event.key() == Qt.Key.Key_Right:
+                #print("다음 이미지로 이동")
                 self.show_next_image()
+                event.accept()  # 이벤트 처리 완료 표시
+                return
             elif event.key() == Qt.Key.Key_Escape:
                 self.show_library()
+                event.accept()
+                return
             # 가독성 조정 단축키
             elif event.key() == Qt.Key.Key_BracketLeft:  # [
                 self.adjust_contrast(-0.1)
+                event.accept()
+                return
             elif event.key() == Qt.Key.Key_BracketRight:  # ]
                 self.adjust_contrast(0.1)
+                event.accept()
+                return
             elif event.key() == Qt.Key.Key_Minus:  # -
                 self.adjust_brightness(-0.1)
+                event.accept()
+                return
             elif event.key() == Qt.Key.Key_Equal:  # =
                 self.adjust_brightness(0.1)
+                event.accept()
+                return
             elif event.key() == Qt.Key.Key_Comma:  # ,
                 self.adjust_sharpness(-0.1)
+                event.accept()
+                return
             elif event.key() == Qt.Key.Key_Period:  # .
                 self.adjust_sharpness(0.1)
+                event.accept()
+                return
+        
         if event.key() == Qt.Key.Key_O:
             self.open_folder()
+            event.accept()
+            return
         elif event.key() == Qt.Key.Key_T:  # T키로 테마 전환
             self.toggle_theme()
+            event.accept()
+            return
             
+        event.ignore()  # 처리되지 않은 이벤트는 무시
+        
     def open_book(self, book: Book):
         self.current_book = book
         self.load_folder(str(book.path))
@@ -119,7 +174,9 @@ class ImageViewer(QMainWindow):
     def show_current_image(self):
         if 0 <= self.current_index < len(self.current_images):
             image_path = self.current_images[self.current_index]
+            #print(f"이미지 처리 시작: {image_path}")
             processed_image = self.image_processor.process_image(str(image_path))
+            #print(f"이미지 처리 완료: {image_path}")
             self.display_image(processed_image)
             
             # 다음 페이지들 미리 업스케일링
@@ -129,6 +186,7 @@ class ImageViewer(QMainWindow):
                 if next_index < len(self.current_images):
                     next_images.append(self.current_images[next_index])
             if next_images:
+                #print(f"다음 페이지 미리 처리: {next_images}")
                 self.image_processor.upscaler.prefetch_images(next_images)
             
             # 현재 페이지 업데이트 및 저장
@@ -146,6 +204,9 @@ class ImageViewer(QMainWindow):
             else:
                 self.status_label.setText("업스케일링 처리 중...")
             
+            # 포커스 설정
+            self.setFocus()
+            
     def show_next_image(self):
         if self.current_images and self.current_index < len(self.current_images) - 1:
             self.current_index += 1
@@ -157,15 +218,61 @@ class ImageViewer(QMainWindow):
             self.show_current_image()
             
     def display_image(self, image):
-        height = self.image_label.height()
-        width = self.image_label.width()
+        if image is None or image.isNull():
+            print("이미지가 유효하지 않습니다.")
+            return
+            
+        # 스크롤 영역의 실제 크기 가져오기
+        scroll_size = self.scroll_area.viewport().size()
+        if scroll_size.width() <= 0 or scroll_size.height() <= 0:
+            print(f"스크롤 영역 크기가 유효하지 않습니다: {scroll_size}")
+            return
+            
+        # 이미지 크기 계산
+        image_size = image.size()
+        image_ratio = image_size.width() / image_size.height()
         
+        # 이미지를 창 너비에 맞추기
+        scaled_width = scroll_size.width()
+        scaled_height = int(scaled_width / image_ratio)
+        
+        #print(f"이미지 정보: 크기={image_size}, 포맷={image.format()}, 깊이={image.depth()}")
+        #print(f"스크롤 영역 크기: {scroll_size}")
+        
+        # QPixmap 생성 및 설정
         pixmap = QPixmap.fromImage(image)
-        scaled_pixmap = pixmap.scaled(width, height, 
-                                    Qt.AspectRatioMode.KeepAspectRatio,
-                                    Qt.TransformationMode.SmoothTransformation)
+        if pixmap.isNull():
+            print("QPixmap 변환 실패")
+            return
+            
+        # 이미지 스케일링
+        scaled_pixmap = pixmap.scaled(
+            scaled_width,
+            scaled_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        
+        if scaled_pixmap.isNull():
+            print("이미지 스케일링 실패")
+            return
+            
+        # 이미지 표시
         self.image_label.setPixmap(scaled_pixmap)
-
+        #print(f"이미지 표시 완료: 원본 크기={image_size}, 스케일된 크기={scaled_width}x{scaled_height}")
+        
+        # 레이블 크기 조정
+        self.image_label.setFixedSize(scaled_width, scaled_height)
+        
+        # 레이블 업데이트 강제
+        self.image_label.update()
+        
+        # 스크롤 영역이 보이도록 스크롤
+        self.scroll_area.ensureVisible(0, 0)
+        
+        # 포커스 설정
+        self.setFocus()
+        
     def toggle_theme(self):
         self.settings.toggle_theme()
         self.apply_theme()
@@ -183,11 +290,22 @@ class ImageViewer(QMainWindow):
                 background-color: {theme.window_background};
                 color: {theme.window_text};
             }}
-            QLabel {{
-                color: {theme.window_text};
+            QLabel#image_label {{
+                background-color: {theme.window_background};
+                border: 1px solid {theme.window_text};  /* 디버깅을 위한 테두리 추가 */
             }}
             QScrollArea {{
                 background-color: {theme.window_background};
+                border: none;  /* 스크롤 영역 테두리 제거 */
+            }}
+            QScrollBar {{
+                background-color: {theme.window_background};
+                width: 12px;
+                height: 12px;
+            }}
+            QScrollBar::handle {{
+                background-color: {theme.window_text};
+                border-radius: 6px;
             }}
             QWidget {{
                 background-color: {theme.window_background};
@@ -196,7 +314,7 @@ class ImageViewer(QMainWindow):
         """)
         
         # 라이브러리 뷰 업데이트
-        self.library_widget.update_theme(theme) 
+        self.library_widget.update_theme(theme)
 
     def adjust_contrast(self, delta: float):
         theme = self.settings.current_theme
@@ -216,4 +334,12 @@ class ImageViewer(QMainWindow):
     def reload_current_image(self):
         """현재 이미지 다시 로드"""
         if hasattr(self, 'current_images') and 0 <= self.current_index < len(self.current_images):
-            self.show_current_image() 
+            self.show_current_image()
+            # 포커스 재설정
+            self.setFocus()
+
+    def resizeEvent(self, event):
+        """창 크기가 변경될 때 호출되는 이벤트"""
+        super().resizeEvent(event)
+        if hasattr(self, 'current_images') and 0 <= self.current_index < len(self.current_images):
+            self.show_current_image()  # 현재 이미지 다시 표시 
