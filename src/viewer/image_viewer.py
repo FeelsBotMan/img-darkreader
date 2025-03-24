@@ -46,18 +46,20 @@ class ImageViewer(QMainWindow):
         # 리더 뷰
         self.reader_widget = QWidget()
         reader_layout = QVBoxLayout(self.reader_widget)
-        reader_layout.setContentsMargins(0, 0, 0, 0)  # 여백 제거
-        reader_layout.setSpacing(0)  # 간격 제거
+        reader_layout.setContentsMargins(0, 0, 0, 0)
+        reader_layout.setSpacing(0)
         
         # 이미지 레이블 설정
         self.image_label = QLabel()
-        self.image_label.setObjectName("image_label")  # 스타일시트에서 참조할 ID 설정
+        self.image_label.setObjectName("image_label")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.image_label.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 이미지 레이블은 포커스를 받지 않음
         
         # 컨테이너 위젯 생성
         container = QWidget()
-        container.setStyleSheet("background-color: transparent;")  # 배경을 투명하게 설정
+        container.setStyleSheet("background-color: transparent;")
+        container.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 컨테이너도 포커스를 받지 않음
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.addWidget(self.image_label)
@@ -69,6 +71,7 @@ class ImageViewer(QMainWindow):
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; }")
+        self.scroll_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 스크롤 영역도 포커스를 받지 않음
         
         # 메인 레이아웃에 스크롤 영역 추가
         reader_layout.addWidget(self.scroll_area)
@@ -81,7 +84,6 @@ class ImageViewer(QMainWindow):
         # 키보드 이벤트 활성화
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.reader_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.scroll_area.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
     def keyPressEvent(self, event):
         #print(f"키 이벤트 발생: {event.key()}")  # 디버깅을 위한 로그 추가
@@ -270,7 +272,8 @@ class ImageViewer(QMainWindow):
         # 스크롤 영역이 보이도록 스크롤
         self.scroll_area.ensureVisible(0, 0)
         
-        # 포커스 설정
+        # 포커스 설정 - 메인 윈도우에 포커스 설정
+        self.activateWindow()
         self.setFocus()
         
     def toggle_theme(self):
