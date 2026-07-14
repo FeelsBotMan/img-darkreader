@@ -28,9 +28,22 @@ def list_root_images(zip_path: str | Path) -> list[str]:
     return sorted(members, key=natural_sort_key)
 
 
-def cache_key_for_member(zip_path: str | Path, member: str) -> str:
-    """업스케일·썸네일 캐시용 키 (zip 절대경로 + 멤버명)."""
-    key = f"{Path(zip_path).resolve()}::{member}"
+def cache_key_for_member(
+    zip_path: str | Path,
+    member: str,
+    *,
+    mode: str | None = None,
+) -> str:
+    """업스케일·썸네일 캐시용 키 (zip 절대경로 + 멤버명 [+ 테마 모드]).
+
+    mode가 주어지면 키에 포함합니다. 업스케일(원본 2×)은 mode 없이 쓰고,
+    표시/프리패치 추적용으로 mode를 붙일 수 있습니다.
+    """
+    resolved = Path(zip_path).resolve()
+    if mode:
+        key = f"{resolved}::{member}::{mode}"
+    else:
+        key = f"{resolved}::{member}"
     return hashlib.md5(key.encode("utf-8")).hexdigest()
 
 
@@ -68,13 +81,14 @@ class ZipImageArchive:
     def iter_prefetch(
         self, start_index: int, count: int = 2
     ) -> Iterator[tuple[str, bytes]]:
-        """다음 페이지들의 (cache_key, bytes)를 순회합니다."""
+        """다음 페이지들의 (업스케일 cache_key, bytes)를 순회합니다."""
         for i in range(1, count + 1):
             idx = start_index + i
             if idx >= len(self.members):
                 break
             member = self.members[idx]
+            # 업스케일은 원본 기준이므로 mode 없이
             yield cache_key_for_member(self.path, member), self.read_bytes(member)
 
-    def member_cache_key(self, member: str) -> str:
-        return cache_key_for_member(self.path, member)
+    def member_cache_key(self, member: str, mode: str | None = None) -> str:
+        return cache_key_for_member(self.path, member, mode=mode)

@@ -1,7 +1,15 @@
+from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
-from pathlib import Path
-import yaml
 from typing import Tuple
+
+import yaml
+
+from .paths import AppPaths
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Theme:
@@ -9,12 +17,13 @@ class Theme:
     text_color: Tuple[int, int, int]
     window_background: str
     window_text: str
-    contrast: float = 1.0  # 대비
-    brightness: float = 1.0  # 밝기
-    sharpness: float = 1.0  # 선명도
-    gamma: float = 1.0  # 감마
-    use_ai_upscaling: bool = True  # AI 업스케일링 사용 여부
-    upscale_factor: int = 2  # 업스케일링 배율
+    contrast: float = 1.0
+    brightness: float = 1.0
+    sharpness: float = 1.0
+    gamma: float = 1.0
+    use_ai_upscaling: bool = False
+    upscale_factor: int = 2
+
 
 class Settings:
     def __init__(self):
@@ -26,7 +35,7 @@ class Settings:
             contrast=1.2,
             brightness=0.9,
             sharpness=1.1,
-            gamma=1.1
+            gamma=1.1,
         )
         self.light_theme = Theme(
             background_color=(255, 255, 255),
@@ -36,46 +45,52 @@ class Settings:
             contrast=1.1,
             brightness=1.0,
             sharpness=1.1,
-            gamma=1.0
+            gamma=1.0,
         )
-        
+
         self.is_dark_mode = True
         self.threshold = 240
-        
+
+        AppPaths.ensure_dirs()
         self.load_settings()
-    
+
     @property
     def current_theme(self) -> Theme:
         return self.dark_theme if self.is_dark_mode else self.light_theme
-    
+
     @property
     def background_color(self) -> Tuple[int, int, int]:
         return self.current_theme.background_color
-    
+
     @property
     def text_color(self) -> Tuple[int, int, int]:
         return self.current_theme.text_color
-    
-    def toggle_theme(self):
+
+    def toggle_theme(self) -> None:
         self.is_dark_mode = not self.is_dark_mode
         self.save_settings()
-    
-    def load_settings(self):
-        config_path = Path.home() / '.dark_reader' / 'config.yaml'
-        if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-                self.is_dark_mode = config.get('is_dark_mode', True)
-                self.threshold = config.get('threshold', self.threshold)
-    
-    def save_settings(self):
-        config_path = Path.home() / '.dark_reader' / 'config.yaml'
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        config = {
-            'is_dark_mode': self.is_dark_mode,
-            'threshold': self.threshold
-        }
-        
-        with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.dump(config, f) 
+
+    def load_settings(self) -> None:
+        config_path = AppPaths.config_file()
+        if not config_path.exists():
+            return
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            self.is_dark_mode = config.get("is_dark_mode", True)
+            self.threshold = config.get("threshold", self.threshold)
+        except (OSError, yaml.YAMLError) as e:
+            logger.error("설정 로드 실패: %s", e)
+
+    def save_settings(self) -> None:
+        config_path = AppPaths.config_file()
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config = {
+                "is_dark_mode": self.is_dark_mode,
+                "threshold": self.threshold,
+            }
+            with open(config_path, "w", encoding="utf-8") as f:
+                yaml.dump(config, f)
+        except OSError as e:
+            logger.error("설정 저장 실패: %s", e)

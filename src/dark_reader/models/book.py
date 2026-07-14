@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ..utils.zip_archive import list_root_images
 
@@ -8,7 +10,7 @@ from ..utils.zip_archive import list_root_images
 @dataclass
 class Book:
     title: str  # ZIP 파일명(확장자 제외)
-    path: Path  # ZIP 파일 경로
+    path: Path  # ZIP 파일 경로 (resolve된 절대경로 권장)
     total_pages: int  # 총 페이지 수
     rating: float = 0.0  # 평점 (기본값 0)
     is_read: bool = False  # 읽음 여부
@@ -17,10 +19,15 @@ class Book:
     question_position: Optional[int] = None  # 문제 위치
     last_opened_at: Optional[float] = None  # Unix 시각(초), 리더에서 책을 열 때만 갱신
 
+    @property
+    def is_available(self) -> bool:
+        """디스크에 ZIP 파일이 존재하는지 여부."""
+        return self.path.is_file()
+
     @classmethod
     def from_zip(cls, zip_path: str | Path) -> "Book":
         """ZIP 경로로부터 Book 객체를 생성합니다."""
-        path = Path(zip_path)
+        path = Path(zip_path).resolve()
         if path.suffix.lower() != ".zip":
             raise ValueError(f"ZIP 파일만 지원합니다: {path}")
         images = list_root_images(path)
@@ -31,7 +38,7 @@ class Book:
             total_pages=len(images),
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Book 객체를 딕셔너리로 변환합니다."""
         return {
             "title": self.title,
@@ -46,16 +53,26 @@ class Book:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Book":
-        """딕셔너리로부터 Book 객체를 생성합니다."""
-        book = cls(
-            title=data["title"],
-            path=Path(data["path"]),
-            total_pages=data["total_pages"],
-        )
-        book.current_page = data["current_page"]
-        book.is_read = data["is_read"]
-        book.rating = data["rating"]
+    def from_dict(cls, data: dict[str, Any]) -> "Book":
+        """딕셔너리로부터 Book 객체를 생성합니다 (누락 키는 기본값)."""
+        raw_path = data.get("path")
+        if not raw_path:
+            raise ValueError("Book 데이터에 path가 없습니다")
+        path = Path(raw_path)
+        try:
+            path = path.resolve()
+        except OSError:
+            path = Path(raw_path)
+
+        title = data.get("title") or path.stem
+        total_pages = int(data.get("total_pages") or 0)
+        book = cls(title=title, path=path, total_pages=total_pages)
+        book.current_page = data.get("current_page")
+        book.is_read = bool(data.get("is_read", False))
+        try:
+            book.rating = float(data.get("rating", 0.0))
+        except (TypeError, ValueError):
+            book.rating = 0.0
         book.answer_position = data.get("answer_position")
         book.question_position = data.get("question_position")
         book.last_opened_at = data.get("last_opened_at")
@@ -63,26 +80,30 @@ class Book:
 
     def get_current_page(self) -> int:
         """현재 페이지를 반환합니다. 없으면 0을 반환합니다."""
-        return self.current_page if self.current_page is not None else 0
+        if self.current_page is None:
+            return 0
+        if self.total_pages <= 0:
+            return 0
+        return max(0, min(self.current_page, self.total_pages - 1))
 
     def update_current_page(self, page: int) -> None:
         """현재 페이지를 업데이트하고 마지막 페이지인 경우 읽음 상태를 변경합니다."""
+        if self.total_pages <= 0:
+            self.current_page = 0
+            return
+        page = max(0, min(page, self.total_pages - 1))
         self.current_page = page
-        if page == self.total_pages - 1:  # 마지막 페이지에 도달
+        if page == self.total_pages - 1:
             self.is_read = True
 
-    def set_answer_position(self, position: int):
-        """정답 위치를 설정합니다."""
+    def set_answer_position(self, position: int) -> None:
         self.answer_position = position
 
-    def set_question_position(self, position: int):
-        """문제 위치를 설정합니다."""
+    def set_question_position(self, position: int) -> None:
         self.question_position = position
 
-    def clear_answer_position(self):
-        """정답 위치를 초기화합니다."""
+    def clear_answer_position(self) -> None:
         self.answer_position = None
 
-    def clear_question_position(self):
-        """문제 위치를 초기화합니다."""
+    def clear_question_position(self) -> None:
         self.question_position = None

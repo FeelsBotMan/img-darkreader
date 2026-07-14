@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 
 from ..config.settings import Theme
 from ..models.book import Book
+from ..models.library import Library
 from ..utils.thumbnail_manager import ThumbnailManager
 from ..utils.zip_archive import ZipImageArchive, cache_key_for_member
 
@@ -379,8 +380,9 @@ class LibraryWidget(QWidget):
     FILTER_READ_IN_PROGRESS = 2
     FILTER_READ_NOT_STARTED = 3
 
-    def __init__(self):
+    def __init__(self, library: Library | None = None):
         super().__init__()
+        self.library = library if library is not None else Library()
         self.thumbnail_manager = ThumbnailManager()
         self._source_books: List[Book] = []
         self._display_books: List[Book] = []
@@ -641,16 +643,10 @@ class LibraryWidget(QWidget):
             self._resize_timer.start(90)
 
     def _on_book_rating_changed(self, book: Book, rating: float):
-        from ..models.library import Library
-
-        library = Library()
-        library.update_book(book)
+        self.library.update_book(book)
 
     def _on_book_read_status_changed(self, book: Book) -> None:
-        from ..models.library import Library
-
-        library = Library()
-        library.update_book(book)
+        self.library.update_book(book)
         self._apply_filter_sort_and_rebuild()
 
     def update_theme(self, theme: Theme) -> None:
