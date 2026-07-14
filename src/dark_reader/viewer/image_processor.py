@@ -1,8 +1,8 @@
 from PIL import Image, ImageEnhance
 import numpy as np
 from PyQt6.QtGui import QImage
-from config.settings import Settings
-from utils.upscaler import ImageUpscaler
+from ..config.settings import Settings
+from ..utils.upscaler import ImageUpscaler
 from pathlib import Path
 
 class ImageProcessor:

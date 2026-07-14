@@ -39,7 +39,17 @@ class Library:
                 self.books[i] = book
                 break
         self.save_library()
-    
+
+    def remove_book(self, book: Book) -> bool:
+        """라이브러리 목록에서만 제거합니다. 디스크의 폴더·이미지 파일은 삭제하지 않습니다."""
+        path = Path(book.path)
+        before = len(self.books)
+        self.books = [b for b in self.books if b.path != path]
+        if len(self.books) < before:
+            self.save_library()
+            return True
+        return False
+
     def load_library(self) -> None:
         """라이브러리 정보를 파일에서 불러옵니다."""
         if self.library_file.exists():

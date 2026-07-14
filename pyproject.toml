@@ -1,13 +1,37 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dark-reader"
+version = "0.1.0"
+description = "이미지 색상 반전 데스크톱 다크 리더"
+readme = "Readme.md"
+requires-python = ">=3.9"
+dependencies = [
+    "PyQt6",
+    "Pillow",
+    "PyYAML",
+    "numpy",
+    "opencv-python",
+]
+
+[project.scripts]
+dark-reader = "dark_reader.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py39"
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-] 
+    "E",
+    "W",
+    "F",
+    "I",
+    "C",
+    "B",
+]

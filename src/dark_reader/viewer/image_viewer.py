@@ -1,13 +1,15 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                            QLabel, QFileDialog, QStackedWidget, QSizePolicy,
-                           QScrollArea)
+                           QScrollArea, QMessageBox, QFrame)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
+import time
 from pathlib import Path
-from viewer.image_processor import ImageProcessor
-from config.settings import Settings
-from models.library import Library
-from models.book import Book
+from ..utils.sort_utils import natural_sort_key
+from .image_processor import ImageProcessor
+from ..config.settings import Settings
+from ..models.library import Library
+from ..models.book import Book
 from typing import Optional
 from .library_widget import LibraryWidget
 
@@ -41,6 +43,8 @@ class ImageViewer(QMainWindow):
         # 라이브러리 뷰
         self.library_widget = LibraryWidget()
         self.library_widget.bookSelected.connect(self.open_book)
+        self.library_widget.bookRemoveRequested.connect(self.confirm_remove_book)
+        self.library_widget.openFolderRequested.connect(self.open_folder)
         self.stack.addWidget(self.library_widget)
         
         # 리더 뷰
@@ -76,6 +80,8 @@ class ImageViewer(QMainWindow):
         # 메인 레이아웃에 스크롤 영역 추가
         reader_layout.addWidget(self.scroll_area)
         
+        self._init_shortcuts_overlay()
+        
         self.stack.addWidget(self.reader_widget)
         
         # 초기 라이브러리 로드
@@ -85,21 +91,94 @@ class ImageViewer(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.reader_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
+    def _init_shortcuts_overlay(self) -> None:
+        self.shortcuts_overlay = QFrame(self.reader_widget)
+        self.shortcuts_overlay.setObjectName("shortcuts_overlay")
+        self.shortcuts_overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        overlay_layout = QVBoxLayout(self.shortcuts_overlay)
+        overlay_layout.setContentsMargins(32, 32, 32, 32)
+        self.shortcuts_help_label = QLabel()
+        self.shortcuts_help_label.setObjectName("shortcuts_help_label")
+        self.shortcuts_help_label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.shortcuts_help_label.setTextFormat(Qt.TextFormat.RichText)
+        self.shortcuts_help_label.setWordWrap(True)
+        self.shortcuts_help_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._refresh_shortcuts_overlay_text()
+        overlay_layout.addWidget(self.shortcuts_help_label)
+        self.shortcuts_overlay.hide()
+        self._update_shortcuts_overlay_geometry()
+
+    def _refresh_shortcuts_overlay_text(self) -> None:
+        self.shortcuts_help_label.setText(
+            "<h3 style='margin-top:0;'>단축키</h3>"
+            "<p><b>← / →</b> 이전·다음 페이지 &nbsp;·&nbsp; <b>Esc</b> 라이브러리</p>"
+            "<p><b>H</b> 이 도움말 닫기</p>"
+            "<hr/>"
+            "<p><b>문제·정답</b></p>"
+            "<p><b>X</b> 현재 페이지를 문제로 저장/해제 &nbsp;·&nbsp; "
+            "<b>S</b> 정답으로 저장/해제</p>"
+            "<p><b>Z</b> 문제 페이지로 이동 &nbsp;·&nbsp; <b>A</b> 정답 페이지로 이동</p>"
+            "<hr/>"
+            "<p><b>가독성</b></p>"
+            "<p><b>[</b> / <b>]</b> 대비 감소·증가 &nbsp;·&nbsp; "
+            "<b>-</b> / <b>=</b> 밝기 감소·증가</p>"
+            "<p><b>,</b> / <b>.</b> 선명도 감소·증가</p>"
+            "<hr/>"
+            "<p><b>기타</b></p>"
+            "<p><b>O</b> 폴더 열기 &nbsp;·&nbsp; <b>T</b> 테마 전환</p>"
+        )
+
+    def _update_shortcuts_overlay_geometry(self) -> None:
+        if not hasattr(self, "shortcuts_overlay"):
+            return
+        self.shortcuts_overlay.setGeometry(0, 0, self.reader_widget.width(), self.reader_widget.height())
+        self.shortcuts_overlay.raise_()
+
+    def toggle_shortcuts_overlay(self) -> None:
+        if self.shortcuts_overlay.isVisible():
+            self.shortcuts_overlay.hide()
+        else:
+            self._refresh_shortcuts_overlay_text()
+            self._update_shortcuts_overlay_geometry()
+            self.shortcuts_overlay.show()
+            self.shortcuts_overlay.raise_()
+        
     def keyPressEvent(self, event):
-        #print(f"키 이벤트 발생: {event.key()}")  # 디버깅을 위한 로그 추가
         if self.stack.currentWidget() == self.reader_widget:
+            if event.key() == Qt.Key.Key_Escape:
+                if self.shortcuts_overlay.isVisible():
+                    self.shortcuts_overlay.hide()
+                else:
+                    self.show_library()
+                event.accept()
+                return
             if event.key() == Qt.Key.Key_Left:
-                #print("이전 이미지로 이동")
                 self.show_previous_image()
-                event.accept()  # 이벤트 처리 완료 표시
+                event.accept()
                 return
             elif event.key() == Qt.Key.Key_Right:
-                #print("다음 이미지로 이동")
                 self.show_next_image()
-                event.accept()  # 이벤트 처리 완료 표시
+                event.accept()
                 return
-            elif event.key() == Qt.Key.Key_Escape:
-                self.show_library()
+            elif event.key() == Qt.Key.Key_H:
+                self.toggle_shortcuts_overlay()
+                event.accept()
+                return
+            # 정답/문제 관련 단축키
+            elif event.key() == Qt.Key.Key_X:  # 현재 위치를 문제로 저장/제거
+                self.toggle_question_position()
+                event.accept()
+                return
+            elif event.key() == Qt.Key.Key_S:  # 현재 위치를 정답으로 저장/제거
+                self.toggle_answer_position()
+                event.accept()
+                return
+            elif event.key() == Qt.Key.Key_Z:  # 문제 위치로 이동
+                self.go_to_question()
+                event.accept()
+                return
+            elif event.key() == Qt.Key.Key_A:  # 정답 위치로 이동
+                self.go_to_answer()
                 event.accept()
                 return
             # 가독성 조정 단축키
@@ -145,8 +224,26 @@ class ImageViewer(QMainWindow):
         self.stack.setCurrentWidget(self.reader_widget)
         
     def show_library(self):
+        if hasattr(self, "shortcuts_overlay"):
+            self.shortcuts_overlay.hide()
         self.library_widget.update_books(self.library.books)
         self.stack.setCurrentWidget(self.library_widget)
+
+    def confirm_remove_book(self, book: Book) -> None:
+        reply = QMessageBox.question(
+            self,
+            "책 제거",
+            f"'{book.title}'을(를) 라이브러리에서 제거할까요?\n\n"
+            "디스크의 폴더와 이미지 파일은 삭제되지 않습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        if self.library.remove_book(book):
+            self.library_widget.update_books(self.library.books)
+            if self.current_book and self.current_book.path == book.path:
+                self.current_book = None
         
     def open_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "폴더 선택")
@@ -157,20 +254,24 @@ class ImageViewer(QMainWindow):
     def load_folder(self, folder_path):
         print(f"Loading folder: {folder_path}")
         self.current_book = self.library.add_book(folder_path)
-        self.current_images = sorted([
-            f for f in Path(folder_path).glob("*")
-            if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
-        ])
+        self.current_images = sorted(
+            [
+                f for f in Path(folder_path).glob("*")
+                if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
+            ],
+            key=natural_sort_key,
+        )
         print(f"Found {len(self.current_images)} images")
         
         if self.current_images:
+            self.current_book.last_opened_at = time.time()
+            self.library.update_book(self.current_book)
             # 저장된 현재 페이지로 이동
             self.current_index = self.current_book.get_current_page()
             print(f"Starting from page {self.current_index}")
             self.show_current_image()
             self.stack.setCurrentWidget(self.reader_widget)
         else:
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "오류", "선택한 폴더에 이미지 파일이 없습니다.")
             
     def show_current_image(self):
@@ -314,6 +415,16 @@ class ImageViewer(QMainWindow):
                 background-color: {theme.window_background};
                 color: {theme.window_text};
             }}
+            QFrame#shortcuts_overlay {{
+                background-color: rgba(0, 0, 0, 210);
+                border: 1px solid rgba(255, 255, 255, 90);
+                border-radius: 8px;
+            }}
+            QLabel#shortcuts_help_label {{
+                background-color: transparent;
+                color: #f0f0f0;
+                font-size: 14px;
+            }}
         """)
         
         # 라이브러리 뷰 업데이트
@@ -344,5 +455,48 @@ class ImageViewer(QMainWindow):
     def resizeEvent(self, event):
         """창 크기가 변경될 때 호출되는 이벤트"""
         super().resizeEvent(event)
+        self._update_shortcuts_overlay_geometry()
         if hasattr(self, 'current_images') and 0 <= self.current_index < len(self.current_images):
             self.show_current_image()  # 현재 이미지 다시 표시 
+
+    def go_to_answer(self):
+        """정답 위치로 이동합니다."""
+        if self.current_book and self.current_images:
+            if self.current_book.answer_position is not None:
+                self.current_index = self.current_book.answer_position
+                self.show_current_image()
+                self.status_label.setText(f"정답 {self.current_index + 1}로 이동")
+            else:
+                self.status_label.setText("저장된 정답이 없습니다")
+                
+    def go_to_question(self):
+        """문제 위치로 이동합니다."""
+        if self.current_book and self.current_images:
+            if self.current_book.question_position is not None:
+                self.current_index = self.current_book.question_position
+                self.show_current_image()
+                self.status_label.setText(f"문제 {self.current_index + 1}로 이동")
+            else:
+                self.status_label.setText("저장된 문제가 없습니다")
+                
+    def toggle_answer_position(self):
+        """현재 위치를 정답으로 저장하거나 제거합니다."""
+        if self.current_book and self.current_images:
+            if self.current_book.answer_position == self.current_index:
+                self.current_book.clear_answer_position()
+                self.status_label.setText("정답 위치 제거됨")
+            else:
+                self.current_book.set_answer_position(self.current_index)
+                self.status_label.setText(f"정답 {self.current_index + 1} 저장됨")
+            self.library.update_book(self.current_book)
+            
+    def toggle_question_position(self):
+        """현재 위치를 문제로 저장하거나 제거합니다."""
+        if self.current_book and self.current_images:
+            if self.current_book.question_position == self.current_index:
+                self.current_book.clear_question_position()
+                self.status_label.setText("문제 위치 제거됨")
+            else:
+                self.current_book.set_question_position(self.current_index)
+                self.status_label.setText(f"문제 {self.current_index + 1} 저장됨")
+            self.library.update_book(self.current_book) 

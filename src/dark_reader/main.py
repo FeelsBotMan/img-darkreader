@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QApplication
 import sys
-from viewer.image_viewer import ImageViewer
+
+from .viewer.image_viewer import ImageViewer
 
 def main():
     app = QApplication(sys.argv)

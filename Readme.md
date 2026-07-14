@@ -17,39 +17,38 @@ source venv/Scripts/activate
 source venv/bin/activate
 ```
 
-```bash
-pip install -r requirements.txt
-```
-
-프로젝트를 개발 모드로 설치합니다. 프로젝트 루트 디렉토리에서 다음 명령을 실행합니다:
+의존성은 `pyproject.toml`의 `[project]`에 정의되어 있습니다. 가상환경에서 프로젝트 루트에서 다음을 실행합니다:
 
 ```bash
-# 가상환경이 활성화된 상태에서
 pip install -e .
 ```
 
-프로그램 실행
+(`requirements.txt`는 안내용이며, 실제 패키지 목록은 `pyproject.toml`을 따릅니다.)
+
+프로그램 실행 (택일)
 
 ```bash
-# 프로젝트 루트 디렉토리에서
+# 개발: 저장소 루트에서 (editable 설치 없이도 동작)
 python run.py
+
+# 패키지 설치 후
+python -m dark_reader
+dark-reader
 ```
 
-프로젝트 구조
+프로젝트 구조 (요약)
 
 ```
 프로젝트/
 ├── src/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── viewer/
-│   │   ├── __init__.py
-│   │   ├── image_viewer.py
-│   │   └── image_processor.py
-│   └── config/
+│   └── dark_reader/
 │       ├── __init__.py
-│       └── settings.py
-├── setup.py
+│       ├── __main__.py
+│       ├── main.py
+│       ├── viewer/
+│       ├── models/
+│       ├── config/
+│       └── utils/
 ├── run.py
 ├── requirements.txt
 └── pyproject.toml
@@ -61,6 +60,11 @@ python run.py
 설정 커스터마이징:
 홈 디렉토리에 .dark_reader/config.yaml 파일을 생성하여 설정을 변경할 수 있습니다:
 
+X: 현재 위치를 문제로 저장/제거 (토글)
+S: 현재 위치를 정답으로 저장/제거 (토글)
+A: 저장된 문제 위치로 이동
+Z: 저장된 정답 위치로 이동
+
 ```yaml
 # 설정 예시
 background_color: [0, 0, 0] # RGB 값 (검정)
@@ -68,23 +72,7 @@ text_color: [200, 200, 200] # RGB 값 (밝은 회색)
 threshold: 240 # 흰색 감지 임계값
 ```
 
-ruff 설정을 위한 pyproject.toml 파일
-
-```toml
-[tool.ruff]
-line-length = 88
-target-version = "py39"
-
-[tool.ruff.lint]
-select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-]
-```
+Ruff 설정은 `pyproject.toml`의 `[tool.ruff]`를 참고하세요.
 
 프로젝트 구조가 올바르게 설정되었는지 확인하기 위해 다음 명령을 실행할 수 있습니다:
 
