@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 from ..config.settings import Theme
 from ..models.book import Book
 from ..utils.thumbnail_manager import ThumbnailManager
+from ..utils.zip_archive import ZipImageArchive, cache_key_for_member
 
 
 def _hex_to_qcolor(hex_str: str) -> QColor:
@@ -175,30 +176,39 @@ class BookCard(QWidget):
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         image_label.setStyleSheet("background: transparent;")
 
-        first_image = (
-            next(self.book.path.glob("*.jpg"), None)
-            or next(self.book.path.glob("*.png"), None)
-            or next(self.book.path.glob("*.jpeg"), None)
-        )
-
         loaded = False
-        if first_image:
-            thumb_path = self.thumbnail_manager.get_thumbnail(first_image)
-            if thumb_path:
-                pixmap = QPixmap(thumb_path)
-                if not pixmap.isNull():
-                    scaled_pixmap = pixmap.scaled(
-                        200,
-                        300,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                    image_label.setPixmap(scaled_pixmap)
-                    loaded = True
+        if (
+            self.book.path.suffix.lower() == ".zip"
+            and self.book.path.is_file()
+        ):
+            try:
+                with ZipImageArchive(self.book.path) as archive:
+                    if archive.members:
+                        member = archive.members[0]
+                        data = archive.read_bytes(member)
+                        cache_id = cache_key_for_member(self.book.path, member)
+                        thumb_path = self.thumbnail_manager.get_thumbnail_bytes(
+                            data, cache_id
+                        )
+                        if thumb_path:
+                            pixmap = QPixmap(thumb_path)
+                            if not pixmap.isNull():
+                                scaled_pixmap = pixmap.scaled(
+                                    200,
+                                    300,
+                                    Qt.AspectRatioMode.KeepAspectRatio,
+                                    Qt.TransformationMode.SmoothTransformation,
+                                )
+                                image_label.setPixmap(scaled_pixmap)
+                                loaded = True
+            except Exception as e:
+                print(f"썸네일 로드 실패 ({self.book.path}): {e}")
 
         if not loaded:
             image_label.setText("이미지 없음")
-            image_label.setStyleSheet("background: transparent; color: #888888; font-size: 11pt;")
+            image_label.setStyleSheet(
+                "background: transparent; color: #888888; font-size: 11pt;"
+            )
 
         thumbnail_layout.addWidget(image_label)
         layout.addWidget(thumbnail_container)
@@ -258,7 +268,7 @@ class BookCard(QWidget):
         menu.addAction(read_act)
         menu.addSeparator()
         remove_act = menu.addAction("라이브러리에서 제거…")
-        remove_act.setToolTip("목록에서만 삭제합니다. 폴더와 파일은 유지됩니다.")
+        remove_act.setToolTip("목록에서만 삭제합니다. ZIP 파일은 유지됩니다.")
         remove_act.triggered.connect(lambda: self.removeRequested.emit(self.book))
         menu_btn.setMenu(menu)
         menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -350,7 +360,7 @@ class BookCard(QWidget):
 class LibraryWidget(QWidget):
     bookSelected = pyqtSignal(Book)
     bookRemoveRequested = pyqtSignal(Book)
-    openFolderRequested = pyqtSignal()
+    openZipRequested = pyqtSignal()
 
     SORT_RECENT_OPEN = 0
     SORT_TITLE = 1
@@ -415,9 +425,11 @@ class LibraryWidget(QWidget):
 
         toolbar.addStretch()
 
-        self._open_btn = QPushButton("폴더 열기")
-        self._open_btn.setToolTip("이미지가 있는 폴더를 선택해 책으로 추가합니다 (단축키 O)")
-        self._open_btn.clicked.connect(self.openFolderRequested.emit)
+        self._open_btn = QPushButton("ZIP 열기")
+        self._open_btn.setToolTip(
+            "이미지가 들어 있는 ZIP을 선택해 책으로 추가합니다 (단축키 O)"
+        )
+        self._open_btn.clicked.connect(self.openZipRequested.emit)
         toolbar.addWidget(self._open_btn)
 
         main_layout.addLayout(toolbar)
@@ -457,14 +469,14 @@ class LibraryWidget(QWidget):
         empty_layout.addStretch()
         msg = QLabel(
             "등록된 책이 없습니다.\n\n"
-            "「폴더 열기」로 이미지 폴더를 추가하거나 단축키 O 를 누르세요."
+            "「ZIP 열기」로 이미지 ZIP을 추가하거나 단축키 O 를 누르세요."
         )
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         msg.setWordWrap(True)
         empty_layout.addWidget(msg)
-        empty_open = QPushButton("폴더 열기")
-        empty_open.setToolTip("이미지가 있는 폴더를 선택합니다 (단축키 O)")
-        empty_open.clicked.connect(self.openFolderRequested.emit)
+        empty_open = QPushButton("ZIP 열기")
+        empty_open.setToolTip("이미지가 들어 있는 ZIP을 선택합니다 (단축키 O)")
+        empty_open.clicked.connect(self.openZipRequested.emit)
         empty_layout.addWidget(empty_open, alignment=Qt.AlignmentFlag.AlignCenter)
         empty_layout.addStretch()
 

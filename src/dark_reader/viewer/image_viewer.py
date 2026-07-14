@@ -2,16 +2,17 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                            QLabel, QFileDialog, QStackedWidget, QSizePolicy,
                            QScrollArea, QMessageBox, QFrame)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QPixmap
 import time
 from pathlib import Path
-from ..utils.sort_utils import natural_sort_key
 from .image_processor import ImageProcessor
 from ..config.settings import Settings
 from ..models.library import Library
 from ..models.book import Book
 from typing import Optional
 from .library_widget import LibraryWidget
+from ..utils.zip_archive import ZipImageArchive
+
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -21,8 +22,8 @@ class ImageViewer(QMainWindow):
         self.image_processor.set_reload_callback(self.reload_current_image)
         self.library = Library()
         self.current_book: Optional[Book] = None
-        self.current_folder = None
-        self.current_images = []
+        self.current_archive: Optional[ZipImageArchive] = None
+        self.current_images: list[str] = []  # zip 멤버명
         self.current_index = -1
         
         self.init_ui()
@@ -44,7 +45,7 @@ class ImageViewer(QMainWindow):
         self.library_widget = LibraryWidget()
         self.library_widget.bookSelected.connect(self.open_book)
         self.library_widget.bookRemoveRequested.connect(self.confirm_remove_book)
-        self.library_widget.openFolderRequested.connect(self.open_folder)
+        self.library_widget.openZipRequested.connect(self.open_zip)
         self.stack.addWidget(self.library_widget)
         
         # 리더 뷰
@@ -125,7 +126,7 @@ class ImageViewer(QMainWindow):
             "<p><b>,</b> / <b>.</b> 선명도 감소·증가</p>"
             "<hr/>"
             "<p><b>기타</b></p>"
-            "<p><b>O</b> 폴더 열기 &nbsp;·&nbsp; <b>T</b> 테마 전환</p>"
+            "<p><b>O</b> ZIP 열기 &nbsp;·&nbsp; <b>T</b> 테마 전환</p>"
         )
 
     def _update_shortcuts_overlay_geometry(self) -> None:
@@ -208,7 +209,7 @@ class ImageViewer(QMainWindow):
                 return
         
         if event.key() == Qt.Key.Key_O:
-            self.open_folder()
+            self.open_zip()
             event.accept()
             return
         elif event.key() == Qt.Key.Key_T:  # T키로 테마 전환
@@ -218,23 +219,37 @@ class ImageViewer(QMainWindow):
             
         event.ignore()  # 처리되지 않은 이벤트는 무시
         
+    def _close_archive(self) -> None:
+        if self.current_archive is not None:
+            self.current_archive.close()
+            self.current_archive = None
+
     def open_book(self, book: Book):
-        self.current_book = book
-        self.load_folder(str(book.path))
-        self.stack.setCurrentWidget(self.reader_widget)
+        if book.path.suffix.lower() != ".zip" or not book.path.is_file():
+            QMessageBox.warning(
+                self,
+                "오류",
+                "유효한 ZIP 파일이 아닙니다.\nZIP을 다시 추가해 주세요.",
+            )
+            return
+        self.load_zip(str(book.path))
         
     def show_library(self):
         if hasattr(self, "shortcuts_overlay"):
             self.shortcuts_overlay.hide()
+        self._close_archive()
+        self.current_images = []
+        self.current_index = -1
         self.library_widget.update_books(self.library.books)
         self.stack.setCurrentWidget(self.library_widget)
+        self.setWindowTitle("다크 리더")
 
     def confirm_remove_book(self, book: Book) -> None:
         reply = QMessageBox.question(
             self,
             "책 제거",
             f"'{book.title}'을(를) 라이브러리에서 제거할까요?\n\n"
-            "디스크의 폴더와 이미지 파일은 삭제되지 않습니다.",
+            "디스크의 ZIP 파일은 삭제되지 않습니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -244,72 +259,101 @@ class ImageViewer(QMainWindow):
             self.library_widget.update_books(self.library.books)
             if self.current_book and self.current_book.path == book.path:
                 self.current_book = None
+                self._close_archive()
         
-    def open_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "폴더 선택")
-        if folder:
-            self.load_folder(folder)
-            self.stack.setCurrentWidget(self.reader_widget)
-            
-    def load_folder(self, folder_path):
-        print(f"Loading folder: {folder_path}")
-        self.current_book = self.library.add_book(folder_path)
-        self.current_images = sorted(
-            [
-                f for f in Path(folder_path).glob("*")
-                if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
-            ],
-            key=natural_sort_key,
+    def open_zip(self):
+        zip_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "ZIP 선택",
+            "",
+            "ZIP (*.zip)",
         )
+        if zip_path:
+            self.load_zip(zip_path)
+            
+    def load_zip(self, zip_path: str):
+        print(f"Loading zip: {zip_path}")
+        path = Path(zip_path)
+        if path.suffix.lower() != ".zip":
+            QMessageBox.warning(self, "오류", "ZIP 파일만 열 수 있습니다.")
+            return
+
+        self._close_archive()
+        try:
+            archive = ZipImageArchive(path)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "오류", f"ZIP을 열 수 없습니다.\n{e}")
+            return
+
+        self.current_archive = archive
+        self.current_images = list(archive.members)
         print(f"Found {len(self.current_images)} images")
-        
-        if self.current_images:
-            self.current_book.last_opened_at = time.time()
-            self.library.update_book(self.current_book)
-            # 저장된 현재 페이지로 이동
-            self.current_index = self.current_book.get_current_page()
-            print(f"Starting from page {self.current_index}")
-            self.show_current_image()
-            self.stack.setCurrentWidget(self.reader_widget)
-        else:
-            QMessageBox.warning(self, "오류", "선택한 폴더에 이미지 파일이 없습니다.")
+
+        if not self.current_images:
+            self._close_archive()
+            QMessageBox.warning(
+                self, "오류", "선택한 ZIP에 이미지 파일이 없습니다."
+            )
+            return
+
+        try:
+            self.current_book = self.library.add_book(path)
+        except ValueError as e:
+            self._close_archive()
+            QMessageBox.warning(self, "오류", str(e))
+            return
+
+        self.current_book.last_opened_at = time.time()
+        # 페이지 수가 바뀌었을 수 있으므로 갱신
+        self.current_book.total_pages = len(self.current_images)
+        self.library.update_book(self.current_book)
+        self.current_index = self.current_book.get_current_page()
+        if self.current_index >= len(self.current_images):
+            self.current_index = 0
+        print(f"Starting from page {self.current_index}")
+        self.show_current_image()
+        self.stack.setCurrentWidget(self.reader_widget)
             
     def show_current_image(self):
-        if 0 <= self.current_index < len(self.current_images):
-            image_path = self.current_images[self.current_index]
-            #print(f"이미지 처리 시작: {image_path}")
-            processed_image = self.image_processor.process_image(str(image_path))
-            #print(f"이미지 처리 완료: {image_path}")
-            self.display_image(processed_image)
-            
-            # 다음 페이지들 미리 업스케일링
-            next_images = []
-            for i in range(1, 3):  # 다음 2페이지를 미리 처리
-                next_index = self.current_index + i
-                if next_index < len(self.current_images):
-                    next_images.append(self.current_images[next_index])
-            if next_images:
-                #print(f"다음 페이지 미리 처리: {next_images}")
-                self.image_processor.upscaler.prefetch_images(next_images)
-            
-            # 현재 페이지 업데이트 및 저장
-            if self.current_book:
-                self.current_book.update_current_page(self.current_index)
-                self.library.update_book(self.current_book)
-                
-                # 제목 표시줄에 현재 페이지 정보 표시
-                self.setWindowTitle(f'다크 리더 - {self.current_book.title} ({self.current_index + 1}/{self.current_book.total_pages})')
-            
-            # 업스케일링 상태 확인
-            cache_path = self.image_processor.upscaler._get_cache_path(Path(image_path))
-            if cache_path.exists():
-                self.status_label.setText("업스케일링 완료")
-            else:
-                self.status_label.setText("업스케일링 처리 중...")
-            
-            # 포커스 설정
-            self.setFocus()
-            
+        if (
+            self.current_archive is None
+            or not (0 <= self.current_index < len(self.current_images))
+        ):
+            return
+
+        member = self.current_images[self.current_index]
+        try:
+            data = self.current_archive.read_bytes(member)
+        except Exception as e:
+            print(f"멤버 읽기 실패: {member}: {e}")
+            QMessageBox.warning(self, "오류", f"이미지를 읽을 수 없습니다.\n{member}")
+            return
+
+        cache_key = self.current_archive.member_cache_key(member)
+        processed_image = self.image_processor.process_bytes(data, cache_key)
+        self.display_image(processed_image)
+
+        # 다음 페이지들 미리 업스케일링
+        prefetch_items = list(
+            self.current_archive.iter_prefetch(self.current_index, count=2)
+        )
+        if prefetch_items:
+            self.image_processor.upscaler.prefetch_images(prefetch_items)
+
+        if self.current_book:
+            self.current_book.update_current_page(self.current_index)
+            self.library.update_book(self.current_book)
+            self.setWindowTitle(
+                f"다크 리더 - {self.current_book.title} "
+                f"({self.current_index + 1}/{self.current_book.total_pages})"
+            )
+
+        if self.image_processor.upscaler.has_disk_cache(cache_key):
+            self.status_label.setText("업스케일링 완료")
+        else:
+            self.status_label.setText("업스케일링 처리 중...")
+
+        self.setFocus()            
     def show_next_image(self):
         if self.current_images and self.current_index < len(self.current_images) - 1:
             self.current_index += 1
@@ -451,6 +495,10 @@ class ImageViewer(QMainWindow):
             self.show_current_image()
             # 포커스 재설정
             self.setFocus()
+
+    def closeEvent(self, event):
+        self._close_archive()
+        super().closeEvent(event)
 
     def resizeEvent(self, event):
         """창 크기가 변경될 때 호출되는 이벤트"""

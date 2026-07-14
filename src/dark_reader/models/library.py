@@ -3,35 +3,41 @@ import json
 from typing import List, Optional
 from .book import Book
 
+
 class Library:
     def __init__(self):
         self.books: List[Book] = []
-        self.config_dir = Path.home() / '.dark_reader'
-        self.library_file = self.config_dir / 'library.json'
+        self.config_dir = Path.home() / ".dark_reader"
+        self.library_file = self.config_dir / "library.json"
         self.load_library()
-    
-    def add_book(self, folder_path: str | Path) -> Book:
+
+    def add_book(self, zip_path: str | Path) -> Book:
         """새로운 책을 라이브러리에 추가합니다."""
-        path = Path(folder_path)
-        
+        path = Path(zip_path)
+        if path.suffix.lower() != ".zip":
+            raise ValueError(f"ZIP 파일만 지원합니다: {path}")
+
         # 이미 존재하는 책인지 확인
         existing_book = self.get_book(path)
         if existing_book:
-            print(f"Found existing book: {existing_book.title}, current_page: {existing_book.current_page}")
+            print(
+                f"Found existing book: {existing_book.title}, "
+                f"current_page: {existing_book.current_page}"
+            )
             return existing_book
-        
+
         # 새 책 생성
-        book = Book.from_folder(folder_path)
+        book = Book.from_zip(path)
         print(f"Created new book: {book.title}")
         self.books.append(book)
         self.save_library()
         return book
-    
+
     def get_book(self, path: str | Path) -> Optional[Book]:
         """경로로 책을 찾습니다."""
         path = Path(path)
         return next((book for book in self.books if book.path == path), None)
-    
+
     def update_book(self, book: Book) -> None:
         """책 정보를 업데이트합니다."""
         for i, b in enumerate(self.books):
@@ -41,7 +47,7 @@ class Library:
         self.save_library()
 
     def remove_book(self, book: Book) -> bool:
-        """라이브러리 목록에서만 제거합니다. 디스크의 폴더·이미지 파일은 삭제하지 않습니다."""
+        """라이브러리 목록에서만 제거합니다. 디스크의 ZIP 파일은 삭제하지 않습니다."""
         path = Path(book.path)
         before = len(self.books)
         self.books = [b for b in self.books if b.path != path]
@@ -51,15 +57,24 @@ class Library:
         return False
 
     def load_library(self) -> None:
-        """라이브러리 정보를 파일에서 불러옵니다."""
+        """라이브러리 정보를 파일에서 불러옵니다. 유효한 .zip 경로만 유지합니다."""
         if self.library_file.exists():
-            with open(self.library_file, 'r', encoding='utf-8') as f:
+            with open(self.library_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.books = [Book.from_dict(book_data) for book_data in data]
-    
+                books = [Book.from_dict(book_data) for book_data in data]
+                self.books = [
+                    b
+                    for b in books
+                    if b.path.suffix.lower() == ".zip" and b.path.is_file()
+                ]
+
     def save_library(self) -> None:
         """라이브러리 정보를 파일에 저장합니다."""
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.library_file, 'w', encoding='utf-8') as f:
-            json.dump([book.to_dict() for book in self.books], f, 
-                     ensure_ascii=False, indent=2) 
+        with open(self.library_file, "w", encoding="utf-8") as f:
+            json.dump(
+                [book.to_dict() for book in self.books],
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
